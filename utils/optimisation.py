@@ -15,7 +15,7 @@ def execute_optimisation(server: str, timeslot_capacity_multiplier: dict, capaci
     Parameters:
         - timeslot_capacity_multiplier: multiplies the capacity of each resource for a given timeslot by the given amount
         - capacity_upper_bound: multiplier for the maximum capacity requested from a resource (i.e. 1.3 = 130%)
-        - weight_factor: determines how heavily priority is weighted
+        - weight_factor: determines how heavily priority is weighed
         - shift_bounds: determines by how much tasks may be shifted into the past/future to optimise the planning
         - resource: resource for which to optimise planning
     Returns:
