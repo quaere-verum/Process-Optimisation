@@ -1,6 +1,6 @@
 # Process-Optimisation
 
-Script which optimises a planning of tasks over time, weighted according to priority, and contrained by an upper bound on resources that can be allocated in each time period. 
+Script which optimises a planning of tasks over time, weighted according to priority, and constrained by an upper bound on resources that can be allocated in each time period. 
 
 Assumptions:
   - Each task, say $A$, consists of sub-tasks which are indexed by the timeslot for which they are planned, say $a_2, a_3, a_4$
