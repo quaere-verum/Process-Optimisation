@@ -80,4 +80,4 @@ def optimise_schedule(data_pivot: pd.DataFrame, weights: pd.DataFrame, resource_
     # The selection can only be 0 (not selected) or 1 (selected)
     bound = Bounds(lb=0, ub=1)
     problem = milp(c=c, bounds=bound, constraints=[constraint1, constraint2], integrality=1)
-    return B.loc[pd.Series(problem.x.astype(bool), index=B.index)]
+    return B.loc[pd.Series(np.round(problem.x).astype(bool), index=B.index)]
