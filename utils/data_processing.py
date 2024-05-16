@@ -67,12 +67,12 @@ def min_max_shifts(data_pivot: pd.DataFrame, bounds=(-np.inf, np.inf)):
     return shifts
 
 
-def timeslot_options(data_pivot: pd.DataFrame, bounds=(-np.inf, np.inf)):
-    shifts = min_max_shifts(data_pivot, bounds)
+def timeslot_options(data_pivot: pd.DataFrame, start_stop_times, bounds=(-np.inf, np.inf)):
     temp = {}
+    max_timeslot = np.max(data_pivot.get_level_values(1))
     # Calculate all the possible shifts for each task
     for k, task in enumerate(data_pivot.index):
-        options = np.arange(shifts[k, 0], shifts[k, 1])
+        options = np.arange(-start_stop_times.loc[task, 'start'], max_timeslot - start_stop_times.loc[task, 'stop'] + 1)
         for s in options:
             temp[(task, int(s))] = data_pivot.loc[task].unstack().T.shift(int(s)).fillna(value=0)
 
