@@ -20,7 +20,7 @@ parser.add_argument('--capacity_upper_bound',
                     required=False)
 parser.add_argument('--weight_exponent',
                     type=float,
-                    help='How heavily the priority of a project is weighed',
+                    help='How heavily the priority of a task is weighed',
                     default=2,
                     required=False)
 parser.add_argument('--resource_ids',
@@ -31,8 +31,8 @@ parser.add_argument('--resource_ids',
 parser.add_argument('--shift_bounds',
                     type=tuple,
                     help='''
-                    A tuple (x, y) of ints. x is the maximum number of months a project can be shifted backwards.
-                    y is the maximum number of months a project can be shifted forwards.
+                    A tuple (x, y) of ints. x is the maximum number of timeslots a task can be shifted backwards.
+                    y is the maximum number of timeslots a task can be shifted forwards.
                     ''',
                     default=(-float('inf'), float('inf')),
                     required=False)
@@ -67,7 +67,7 @@ def main():
     weight_exponent = args.weight_exponent
     shift_bounds = args.shift_bounds
     resource_ids = args.resource_ids
-    selection, ongoing_projects, all_projects = execute_optimisation(
+    selection, ongoing_tasks, all_tasks = execute_optimisation(
         server=server,
         timeslot_capacity_multiplier=timeslot_capacity_multiplier,
         capacity_upper_bound=capacity_upper_bound,
