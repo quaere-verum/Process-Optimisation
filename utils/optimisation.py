@@ -44,6 +44,7 @@ def execute_optimisation(server: str, timeslot_capacity_multiplier: dict, capaci
 
 
 def optimise_schedule(data_pivot: pd.DataFrame, weights: pd.DataFrame, resource_capacity: pd.DataFrame,
+                      start_stop_times: pd.DataFrame,
                       weight_exponent: float, lb=0, ub=1.3, shift_bounds=(-np.inf, np.inf)):
     """
     This function solves the following problem: it selects the projects (contained in data_pivot) which maximise the
@@ -63,7 +64,7 @@ def optimise_schedule(data_pivot: pd.DataFrame, weights: pd.DataFrame, resource_
     # multiple times, namely the amount of shifts that are possible.
     # A2 will ensure that only one of these options can be selected, i.e. no task can be planned
     # twice with different shifts.
-    B, A2 = timeslot_options(data_pivot, shift_bounds)
+    B, A2 = timeslot_options(data_pivot, start_stop_times, shift_bounds)
     w = (weights.reindex(B.index.get_level_values(0)).values.reshape(-1)) ** weight_exponent
     resource_capacity_stacked = resource_capacity.fillna(value=0).stack().to_frame()
     C = resource_capacity_stacked.reindex(B.columns).fillna(value=0).values.reshape(-1)
