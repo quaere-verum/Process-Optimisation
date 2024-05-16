@@ -48,25 +48,6 @@ def remove_ongoing_projects(data: pd.DataFrame, resource_capacity: pd.DataFrame,
     return remaining_capacity, remaining_tasks, ongoing_tasks
 
 
-def min_max_shifts(data_pivot: pd.DataFrame, bounds=(-np.inf, np.inf)):
-    # temp is the number of hours per task per period, for each resource.
-    # Index is task + timeslot, columns are resources
-    temp = data_pivot.stack()
-    tasks = data_pivot.index
-    # shifts will contain the maximum possible months by which a project can be shifted forwards or backwards
-    shifts = np.zeros((len(data_pivot), 2))
-    for k, task in enumerate(tasks):
-        # maximum backwards shift: either bounds[0], or if that is not possible,
-        # the maximum number of months before the first hours for the project are planned
-        shifts[k, 0] = np.max([-np.nonzero((temp.loc[task].sum(axis=1)).values)[0][0], bounds[0]])
-        # maximum forward shift: either bounds[1], or if that is not possible the maximum difference
-        # between the final timeslot and the final timeslot for which resources are allocated
-        shifts[k, 1] = np.min([len(temp.loc[task]) - np.nonzero((temp.loc[task].sum(axis=1)).values)[0][-1],
-                               bounds[1] + 1])
-
-    return shifts
-
-
 def timeslot_options(data_pivot: pd.DataFrame, start_stop_times, bounds=(-np.inf, np.inf)):
     temp = {}
     max_timeslot = np.max(data_pivot.get_level_values(1))
