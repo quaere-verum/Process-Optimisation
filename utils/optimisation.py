@@ -34,7 +34,7 @@ def execute_optimisation(server: str, timeslot_capacity_multiplier: dict, capaci
     remaining_weights = remaining_tasks.groupby('TaskID').Weights.mean().to_frame()
 
     # Dataframe which lists, per project, how much time it asks from each resource, per timeslot
-    start_stop_times = remaining_tasks.groupy('TaskID').agg(start=('Timeslot', np.min), stop=('Timeslot', np.max))
+    start_stop_times = remaining_tasks.groupby('TaskID').agg(start=('Timeslot', np.min), stop=('Timeslot', np.max))
     timeslot_pivot = remaining_tasks.groupby(
         ['TaskID', 'Timeslot', 'ResourceID']).ResourceAmount.sum().unstack().unstack().fillna(value=0)
     selection = optimise_schedule(timeslot_pivot, remaining_weights, remaining_capacity, start_stop_times,

@@ -50,7 +50,7 @@ def remove_ongoing_projects(data: pd.DataFrame, resource_capacity: pd.DataFrame,
 
 def timeslot_options(data_pivot: pd.DataFrame, start_stop_times, bounds=(-np.inf, np.inf)):
     temp = {}
-    max_timeslot = np.max(data_pivot.get_level_values(1))
+    max_timeslot = np.max(data_pivot.columns.get_level_values(1))
     # Calculate all the possible shifts for each task
     for k, task in enumerate(data_pivot.index):
         options = np.arange(-start_stop_times.loc[task, 'start'], max_timeslot - start_stop_times.loc[task, 'stop'] + 1)
