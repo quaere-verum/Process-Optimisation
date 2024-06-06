@@ -1,6 +1,6 @@
 from utils.data_processing import (fetch_data,
                                    data_prep,
-                                   remove_ongoing_projects,
+                                   remove_mandatory_projects,
                                    timeslot_options)
 from scipy.optimize import milp, LinearConstraint, Bounds
 import numpy as np
@@ -17,30 +17,31 @@ def execute_optimisation(server: str, timeslot_capacity_multiplier: dict, capaci
         - capacity_upper_bound: multiplier for the maximum capacity requested from a resource (i.e. 1.3 = 130%)
         - weight_factor: determines how heavily priority is weighed
         - shift_bounds: determines by how much tasks may be shifted into the past/future to optimise the planning
-        - resource: resource for which to optimise planning
+        - resource: resource for which to optimise planning. Use 'None' for all resources simultaneously.
     Returns:
-        - selection: dataframe containing the selected new projects for the optimal planning. Multi-index: first layer
-        is TaskID, second is timeslots shifted (negative means shifted into the past)
-        - ongoing_tasks: tasks that have to be planned in because they are already running
+        - selection: dataframe containing the selected projects for the optimal planning. Multi-index: first layer
+        is TaskID, second is timeslots shifted (negative means earlier than originally planned)
+        - mandatory_tasks: tasks that have to be planned in because they are mandatory
         - all_tasks: all tasks
     """
     planning, available = fetch_data(resource_ids)
     all_tasks, resource_capacity = data_prep(planning, available)
-    remaining_capacity, remaining_tasks, ongoing_tasks = remove_ongoing_projects(all_tasks,
+    remaining_capacity, remaining_tasks, mandatory_tasks = remove_mandatory_projects(all_tasks,
                                                                                  resource_capacity,
                                                                                  timeslot_capacity_multiplier)
     # Clip capacity at 0, otherwise there will be no solution which does not exceed a resource's capacity bounds
     remaining_capacity = remaining_capacity.clip(lower=0, upper=np.inf)
     remaining_weights = remaining_tasks.groupby('TaskID').Weights.mean().to_frame()
 
-    # Dataframe which lists, per project, how much time it asks from each resource, per timeslot
+    # Get starting time and stopping time of each project, to be used for determining how much a project can be shifted
     start_stop_times = remaining_tasks.groupby('TaskID').agg(start=('Timeslot', np.min), stop=('Timeslot', np.max))
+    # Dataframe which lists, per project, how much time it asks from each resource, per timeslot
     timeslot_pivot = remaining_tasks.groupby(
         ['TaskID', 'Timeslot', 'ResourceID']).ResourceAmount.sum().unstack().unstack().fillna(value=0)
     selection = optimise_schedule(timeslot_pivot, remaining_weights, remaining_capacity, start_stop_times,
                                   weight_exponent=weight_exponent, ub=capacity_upper_bound,
                                   shift_bounds=shift_bounds)
-    return selection, ongoing_tasks, all_tasks
+    return selection, mandatory_tasks, all_tasks
 
 
 def optimise_schedule(data_pivot: pd.DataFrame, weights: pd.DataFrame, resource_capacity: pd.DataFrame,
@@ -68,11 +69,12 @@ def optimise_schedule(data_pivot: pd.DataFrame, weights: pd.DataFrame, resource_
     w = (weights.reindex(B.index.get_level_values(0)).values.reshape(-1)) ** weight_exponent
     resource_capacity_stacked = resource_capacity.fillna(value=0).stack().to_frame()
     C = resource_capacity_stacked.reindex(B.columns).fillna(value=0).values.reshape(-1)
-    J = np.ones(B.shape[1])
+
     # A small amount (0.001) is added to the weights for the original planning.
     # That is, if it makes no difference for the constraints, then the original planning is preferred.
-    c = (-B.dot(J)) * (w + np.where(np.array(B.index.get_level_values(1)) == 0, 0.001, 0).reshape(-1))
+    c = (-B.sum(axis=1)) * (w + np.where(np.array(B.index.get_level_values(1)) == 0, 0.001, 0).reshape(-1))
     A1 = B.T
+
     # Resource capacity may not be exceeded by more than ub
     constraint1 = LinearConstraint(A1, C * lb, C * ub)
     # Each project may only be planned once (i.e. not multiple shifted versions)

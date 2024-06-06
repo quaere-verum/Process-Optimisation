@@ -24,11 +24,11 @@ def data_prep(planning: pd.DataFrame, available: pd.DataFrame):
     return planning, capacity
 
 
-def remove_ongoing_projects(data: pd.DataFrame, resource_capacity: pd.DataFrame,
+def remove_mandatory_projects(data: pd.DataFrame, resource_capacity: pd.DataFrame,
                             timeslot_capacity_multiplier: dict):
 
-    # The TaskStatusID's which we have deemed "ongoing", so these have to be planned in
-    ongoing_status = [3, 4, 5]
+    # The TaskStatusID's which we have deemed "mandatory", so these have to be planned in
+    mandatory_status = [1]
 
     # Change month_capacity_multiplier to a vector to be multiplier with resource_capacity
 
@@ -36,16 +36,16 @@ def remove_ongoing_projects(data: pd.DataFrame, resource_capacity: pd.DataFrame,
 
     resource_timeslot_capacity = pd.DataFrame(resource_capacity.values*timeslot_multiplier.values,
                                               index=resource_capacity.index, columns=resource_capacity.columns)
-    # Split tasks into ongoing and new, and adjust capacity accordingly
-    ongoing_tasks = data.loc[data.TaskStatusID.isin(ongoing_status)].copy()
-    # How much capacity is required for each time, per month, to finish the ongoing tasks
-    ongoing_capacity_usage = ongoing_tasks.groupby(['ResourceID',
-                                                    'Timeslot']).ResourceAmount.sum().unstack().fillna(value=0)
-    ongoing_capacity_usage = ongoing_capacity_usage.reindex(columns=resource_timeslot_capacity.columns)
-    # Adjust the capacity base on ongoing tasks
-    remaining_capacity = resource_timeslot_capacity - ongoing_capacity_usage
-    remaining_tasks = data.loc[~(data.TaskStatusID.isin(ongoing_status))].copy()
-    return remaining_capacity, remaining_tasks, ongoing_tasks
+    # Split tasks into mandatory and other, and adjust capacity accordingly
+    mandatory_tasks = data.loc[data.TaskStatusID.isin(mandatory_status)].copy()
+    # How much capacity is required for each time, per timeslot, to finish the mandatory tasks
+    mandatory_capacity_usage = mandatory_tasks.groupby(['ResourceID',
+                                                        'Timeslot']).ResourceAmount.sum().unstack().fillna(value=0)
+    mandatory_capacity_usage = mandatory_capacity_usage.reindex(columns=resource_timeslot_capacity.columns)
+    # Adjust the capacity based on mandatory tasks
+    remaining_capacity = resource_timeslot_capacity - mandatory_capacity_usage
+    remaining_tasks = data.loc[~(data.TaskStatusID.isin(mandatory_status))].copy()
+    return remaining_capacity, remaining_tasks, mandatory_tasks
 
 
 def timeslot_options(data_pivot: pd.DataFrame, start_stop_times, bounds=(-np.inf, np.inf)):

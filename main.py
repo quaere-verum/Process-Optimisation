@@ -67,13 +67,14 @@ def main():
     weight_exponent = args.weight_exponent
     shift_bounds = args.shift_bounds
     resource_ids = args.resource_ids
-    selection, ongoing_tasks, all_tasks = execute_optimisation(
+    selection, mandatory_tasks, all_tasks = execute_optimisation(
         server=server,
         timeslot_capacity_multiplier=timeslot_capacity_multiplier,
         capacity_upper_bound=capacity_upper_bound,
         weight_exponent=weight_exponent,
         shift_bounds=shift_bounds,
         resource_ids=resource_ids)
+    print(all_tasks)
     print(selection)
     # Process the selected planning by e.g. uploading into SQL database, saving to Excel, etc.
 
