@@ -5,11 +5,17 @@ from utils.data_processing import (fetch_data,
 from scipy.optimize import milp, LinearConstraint, Bounds
 import numpy as np
 import pandas as pd
-from typing import Union
+from typing import Union, Dict, Tuple
 
 
-def execute_optimisation(server: str, timeslot_capacity_multiplier: dict, capacity_upper_bound: float,
-                         resource_ids: Union[str, int], weight_exponent: float, shift_bounds: tuple = (-np.inf, np.inf)):
+def execute_optimisation(
+  server: str, 
+  timeslot_capacity_multiplier: Dict[int, float], 
+  capacity_upper_bound: float,
+  resource_ids: Union[str, int], 
+  weight_exponent: float, 
+  shift_bounds: Tuple[float, float] = (-np.inf, np.inf)
+) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrane]:
     """
     Executes all sub-functions from the package to return the optimal planning.
     Parameters:
@@ -44,9 +50,16 @@ def execute_optimisation(server: str, timeslot_capacity_multiplier: dict, capaci
     return selection, mandatory_tasks, all_tasks
 
 
-def optimise_schedule(data_pivot: pd.DataFrame, weights: pd.DataFrame, resource_capacity: pd.DataFrame,
-                      start_stop_times: pd.DataFrame,
-                      weight_exponent: float, lb=0, ub=1.3, shift_bounds=(-np.inf, np.inf)):
+def optimise_schedule(
+  data_pivot: pd.DataFrame, 
+  weights: pd.DataFrame, 
+  resource_capacity: pd.DataFrame,
+  start_stop_times: pd.DataFrame,
+  weight_exponent: float,
+  lb: float = 0, 
+  ub: float = 1.3, 
+  shift_bounds = Tuple[float, float] = (-np.inf, np.inf)
+) -> pd.DataFrame:
     """
     This function solves the following problem: it selects the projects (contained in data_pivot) which maximise the
     amount of resources being utilised.
