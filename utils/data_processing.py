@@ -1,9 +1,10 @@
 import pandas as pd
 import numpy as np
 import os
+from typing import Tuple
 
 
-def fetch_data(resource_ids):
+def fetch_data(resource_ids) -> Tuple[pd.DataFrame, pd.DataFrame]:
     # Could add additional logic for retrieving data, e.g. querying the planned items for a start and end date
     # This was omitted from this demo file to preserve the abstraction
     path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'test_data')
@@ -16,7 +17,10 @@ def fetch_data(resource_ids):
     return planning, available
 
 
-def data_prep(planning: pd.DataFrame, available: pd.DataFrame):
+def data_prep(
+    planning: pd.DataFrame, 
+    available: pd.DataFrame
+) -> Tuple[pd.DataFrame, pd.DataFrame]:
     available = available[['Timeslot', 'ResourceID', 'ResourceAmount']]
     capacity = available.pivot_table(index=['ResourceID'], columns=['Timeslot'], values='ResourceAmount',
                                      aggfunc='sum', fill_value=0)
@@ -24,8 +28,11 @@ def data_prep(planning: pd.DataFrame, available: pd.DataFrame):
     return planning, capacity
 
 
-def remove_mandatory_projects(data: pd.DataFrame, resource_capacity: pd.DataFrame,
-                            timeslot_capacity_multiplier: dict):
+def remove_mandatory_projects(
+    data: pd.DataFrame, 
+    resource_capacity: pd.DataFrame,
+    timeslot_capacity_multiplier: dict
+) -> Tuple[pd.DataFrame, pd.DataFrame]:
 
     # The TaskStatusID's which we have deemed "mandatory", so these have to be planned in
     mandatory_status = [1]
@@ -48,7 +55,11 @@ def remove_mandatory_projects(data: pd.DataFrame, resource_capacity: pd.DataFram
     return remaining_capacity, remaining_tasks, mandatory_tasks
 
 
-def timeslot_options(data_pivot: pd.DataFrame, start_stop_times, bounds=(-np.inf, np.inf)):
+def timeslot_options(
+    data_pivot: pd.DataFrame, 
+    start_stop_times, 
+    bounds=(-np.inf, np.inf)
+) -> Tuple[pd.DataFrame, np.array]:
     temp = {}
     max_timeslot = np.max(data_pivot.columns.get_level_values(1))
     # Calculate all the possible shifts for each task
