@@ -9,6 +9,8 @@ from typing import Union, Dict, Tuple, Iterable, Callable, List
 from dataclasses import dataclass
 from collections import deque
 from tqdm import tqdm
+import seaborn as sns
+import matplotlib.colors as mcolors
 warnings.filterwarnings('ignore', category=FutureWarning)
 np.random.seed(123)
 
@@ -22,6 +24,7 @@ colour_dictionary = {
     'light_blue' : '#add8e6',
     'dark_blue' : '#03b1fc'
 }
+cmap = mcolors.ListedColormap([c for c in colour_dictionary.values()][::-1])
 
 
 @dataclass
@@ -43,7 +46,6 @@ class ScheduleStatus:
         self.required_capacity: pd.DataFrame = None
         self.selection = []
         self.capacity_used: pd.DataFrame = None
-        self.final_selection: pd.DataFrame = None
 
         self.required_capacity = pd.pivot(self.all_items, values=['relativeCost'], columns='Resource').fillna(0)
         self.required_capacity.columns = self.required_capacity.columns.get_level_values(1)
@@ -146,31 +148,20 @@ class ScheduleOptimiser(ScheduleStatus):
         cont = self._make_selection()
         if not cont:
             raise StopIteration
-        
-    def generate_planning(self, n_iter) -> None:
-        iterator = iter(self)
-        for _ in tqdm(range(n_iter)):
-            next(iterator)
-        final_selection = pd.DataFrame(self.selection, columns=['Key', 'Distribution'])
-        self.capacity_used.columns = self.capacity_used.columns.to_series().map({v: k for k, v in self.resources_dict.items()})
-        self.final_selection = pd.merge(
-            self.all_items.loc[self.all_items.index.to_series().isin(final_selection['Key'])], 
-            final_selection.set_index('Key'),
+
+    def display_state(self):
+        current_selection = pd.DataFrame(self.selection, columns=['Key', 'Distribution'])
+        capacity_used = self.capacity_used.rename(columns={v: k for k, v in self.resources_dict.items()})
+        current_selection = pd.merge(
+            self.all_items.loc[current_selection['Key'].to_list()], 
+            current_selection.set_index('Key'),
             left_index=True, 
             right_index=True
-        )
-        inverse_dict = {v: k for k, v in self.items_dict.items()}
-        self.final_selection.index = self.final_selection.index.to_series().map(inverse_dict)
-                           
-    def run(self, n_iter) -> None:
-        self.generate_planning(n_iter)
-        if self.final_selection is None:
-            print(f'No feasible planning was found.')
-        else:
-            print(self.final_selection)
-            print(f'Mean priority score original data: {np.mean(self.all_items["Priority"]):.3f}')
-            print(f'Mean priority score planning: {np.mean(self.final_selection["Priority"]):.3f}')
+        ).rename(index={v: k for k, v in self.items_dict.items()})
 
+        print(current_selection)
+        sns.heatmap(capacity_used, vmin=60 / self.timeslots_available, vmax=140 / self.timeslots_available, annot=True, cmap=cmap)
+        plt.show()
         
 
 if __name__ == '__main__':
@@ -193,5 +184,8 @@ if __name__ == '__main__':
         all_items=pd.DataFrame.from_dict(fake_item_info).T,
         max_subplanning_size=5,
     )
-    planner.run(10)
+    for k in tqdm(range(15)):
+        next(planner)
+        if (k + 1) % 5 == 0:
+            planner.display_state()
 
