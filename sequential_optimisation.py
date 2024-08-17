@@ -5,9 +5,9 @@ from itertools import combinations, product
 import warnings
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
-from typing import Union, Dict, Tuple, Iterable, Callable, List
+from typing import Union, Dict, Tuple, Iterable, Callable, List, Literal
 from dataclasses import dataclass
-from collections import deque
+from abc import abstractmethod
 from tqdm import tqdm
 import seaborn as sns
 import matplotlib.colors as mcolors
@@ -33,30 +33,30 @@ class ScheduleStatus:
     capacity_usage_bound: Union[pd.DataFrame, pd.Series, float]
     capacity_multiplier: pd.DataFrame
     all_items: pd.DataFrame
-    max_subplanning_size: int = 25
+
     
     def __post_init__(self):
+        if self.max_item_duration == -1:
+            self.max_item_duration = self.timeslots_available
         self.resources = list(self.all_items.Resource.unique())
         self.items_dict = dict(zip(list(self.all_items.index), np.arange(len(self.all_items))))
         self.resources_dict = dict(zip(self.resources, np.arange(len(self.resources))))
         self.all_items = self.all_items.rename(index=self.items_dict).sort_index()
         self.all_items['Resource'] = self.all_items['Resource'].map(self.resources_dict)
-
-        self.reset()
-        
-        
-    def reset(self):
-        self.remaining_items = self.all_items.copy()
-        self.required_capacity: pd.DataFrame = None
-        self.selection = []
-        self.capacity_used: pd.DataFrame = None
-
         self.required_capacity = pd.pivot(self.all_items, values=['relativeCost'], columns='Resource').fillna(0)
         self.required_capacity.columns = self.required_capacity.columns.get_level_values(1)
         self.required_capacity = self.required_capacity.sort_index(axis=0).sort_index(axis=1)
         self.item_score = self.all_items['relativeCost'] * self.all_items['Priority']
         self.item_score = self.item_score.sort_index()
         self.capacity_multiplier = self.capacity_multiplier.rename(columns=self.resources_dict)
+
+        self.reset()
+        
+        
+    def reset(self):
+        self.remaining_items = self.all_items.copy()
+        self.selection = []
+        self.capacity_used: pd.DataFrame = None
         self.remaining_capacity = pd.DataFrame(
             100 / self.timeslots_available,
             columns=self.required_capacity.columns,
@@ -92,13 +92,18 @@ class ScheduleStatus:
         ).rename(index={v: k for k, v in self.items_dict.items()})
         current_selection["Resource"] = current_selection["Resource"].map({v: k for k, v in self.resources_dict.items()})
         return current_selection
+    
+    @abstractmethod
+    def make_planning(self) -> None:
+        raise NotImplementedError
+    
 
 class ScheduleOptimiser(ScheduleStatus):
-    def _options(self):
+    def _options(self) -> pd.DataFrame:
         assert "Distribution" in self.all_items.columns, "Schedule optimiser assumes that items were already distributed over timeslots"
         return self.all_items.explode("Distribution").pivot(columns=["Resource", "Distribution"], values="relativeCost").sort_index(axis=1).fillna(0)
     
-    def make_planning(self):
+    def make_planning(self, display_on_finish: bool = False):
         if self.capacity_used is not None:
             self.reset()
         options = self._options()
@@ -115,9 +120,33 @@ class ScheduleOptimiser(ScheduleStatus):
         selected_items = options.loc[pd.Series(np.round(planning.x).astype(bool), index=options.index)]
         selected_items.index = pd.MultiIndex.from_arrays([selected_items.index, self.all_items.loc[selected_items.index].Distribution.values])
         self._update_state(selected_items)
+        if display_on_finish:
+            self.display_state()
 
-
+@dataclass
 class SequentialScheduleOptimiser(ScheduleStatus):
+    max_subplanning_size: int = 25
+    timeslot_combinations: Literal["all", "adjacent"] = "all"
+    max_item_duration: int = -1
+
+    def __post_init__(self):
+        super().__post_init__()
+        if self.timeslot_combinations == "all":
+            combs = []
+            for k in range(1, self.max_item_duration + 1):
+                combs = combs + list(combinations(range(1, self.timeslots_available + 1), k))
+        elif self.timeslot_combinations == "adjacent":
+            combs = [tuple(np.arange(1, length + 1) + offset) for length in range(1, self.max_item_duration + 1) 
+                     for offset in range(self.timeslots_available) 
+                     if offset + length <= self.timeslots_available]
+            
+        index = self.all_items.index.to_list() * len(combs)
+        item_timeslot_distributions = self.all_items.reindex(index).sort_index().set_index(pd.MultiIndex.from_product([self.all_items.index, combs]))
+        item_timeslot_distributions["Distribution"] = item_timeslot_distributions.index.get_level_values(1).values
+        all_options = item_timeslot_distributions.explode("Distribution").pivot(columns=["Resource", "Distribution"], values="relativeCost").sort_index(axis=1)
+        all_options = all_options.div(all_options.index.get_level_values(1).to_series().apply(lambda x: len(x)).values.reshape(-1, 1))
+        self._all_options = all_options
+
     def _solve_subplanning(self) -> Union[pd.Series, None]:
         constraint = self.remaining_capacity.sum(axis=0).values
         problem = milp(-self.item_score,
@@ -130,18 +159,7 @@ class SequentialScheduleOptimiser(ScheduleStatus):
         )
         if problem.x is None:
             return None
-        return pd.Series(np.round(problem.x).astype(bool), index=self.required_capacity.index)
-
-    def _options(self, selection: pd.DataFrame) -> Union[pd.DataFrame, None]:
-        combs = []
-        for k in range(1, self.timeslots_available + 1):
-            combs = combs + list(combinations(range(1, self.timeslots_available + 1), k))
-        index = selection.index.to_list() * len(combs)
-        item_timeslot_distributions = selection.reindex(index).sort_index().set_index(pd.MultiIndex.from_product([selection.index, combs]))
-        item_timeslot_distributions["Distribution"] = item_timeslot_distributions.index.get_level_values(1).values
-        options = item_timeslot_distributions.explode("Distribution").pivot(columns=["Resource", "Distribution"], values="relativeCost").sort_index(axis=1)
-        options = options / options.index.get_level_values(1).to_series().apply(lambda x: len(x)).values.reshape(-1, 1)
-        return options.fillna(0)
+        return self.remaining_items.loc[pd.Series(np.round(problem.x).astype(bool), index=self.remaining_items.index)].index
 
     def _selection_count_constraint(self, options: pd.DataFrame) -> np.ndarray:
        return pd.concat(
@@ -155,9 +173,7 @@ class SequentialScheduleOptimiser(ScheduleStatus):
         subplanning = self._solve_subplanning()
         if subplanning is None:
             return 0
-        options = self._options(self.remaining_items.loc[subplanning])
-        if options is None:
-            return 0
+        options = self._all_options.loc[subplanning]
         selection_constraint = self._selection_count_constraint(options)
 
         planning = milp(
@@ -185,6 +201,16 @@ class SequentialScheduleOptimiser(ScheduleStatus):
         nr_selected = self._make_selection()
         if nr_selected == 0:
             raise StopIteration
+        
+    def make_planning(self, max_steps: int = 10, display_on_finish: bool = False) -> None:
+        for step in tqdm(range(max_steps)):
+            try:
+                next(self)
+            except StopIteration:
+                print(f"Planning finished after {step} iterations.")
+                break
+        if display_on_finish:
+            self.display_state()
 
         
 
@@ -192,7 +218,7 @@ if __name__ == '__main__':
 
     timeslots = 6
     capacity_bound = 1.1
-    fake_item_keys = [f'Test-{k}' for k in range(1, 101)]
+    fake_item_keys = [f'Test-{k}' for k in range(1, 501)]
     fake_resources = [f'Team {k}' for k in range(1, 7)]
     fake_item_info = {key: {'relativeCost': np.random.randint(3, 10),
                                 'Priority': np.random.randint(1, 101),
@@ -206,12 +232,8 @@ if __name__ == '__main__':
         capacity_usage_bound=capacity_bound,
         capacity_multiplier=capacity_multiplier,
         all_items=pd.DataFrame.from_dict(fake_item_info).T,
-        max_subplanning_size=10,
+        max_subplanning_size=20,
+        max_item_duration=4,
+        timeslot_combinations="adjacent",
     )
-    for k in tqdm(range(20)):
-        try:
-            next(planner)
-        except StopIteration:
-            print(f"Planning finished after {k} iterations.")
-            break
-    planner.display_state()
+    planner.make_planning(display_on_finish=True)
