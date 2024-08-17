@@ -7,7 +7,7 @@ Assumptions:
   - Sub-tasks must be performed in order, but may be shifted relative to their original planning
   - Each task has a priority score, or weight. This is a scalar greater than $1$
   - A task must be performed in its entirety, or not at all
-  - Each task has a TaskStatusID. If a TaskStatusID has been labeled "ongoing", this task must be scheduled in its entirety
+  - Each task has a TaskStatusID. If a TaskStatusID has been labeled "mandatory", this task must be scheduled in its entirety
   - Each sub-task requires resources from (possibly multiple) resource pools
   - The objective function to be maximised, is resources utilised in the planning, weighted by task priority score (which is a parameter of the model, "weight_exponent")
   - The constraint is that, for each timeslot, we may not ask for more than some percentage of each resource pool's available resources (this percentage is a parameter called "ub" for upper bound)
