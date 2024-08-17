@@ -7,6 +7,8 @@ import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
 from typing import Union, Dict, Tuple, Iterable, Callable, List
 from dataclasses import dataclass
+from collections import deque
+from tqdm import tqdm
 warnings.filterwarnings('ignore', category=FutureWarning)
 np.random.seed(123)
 
@@ -89,7 +91,7 @@ class ScheduleStatus:
 
 
 class ScheduleOptimiser(ScheduleStatus):
-    def solve_subplanning(self) -> Union[pd.Series, None]:
+    def _solve_subplanning(self) -> Union[pd.Series, None]:
         constraint = self.remaining_capacity.sum(axis=0).values
         problem = milp(-self.item_score,
             integrality=1,
@@ -103,21 +105,21 @@ class ScheduleOptimiser(ScheduleStatus):
             return None
         return pd.Series(np.round(problem.x).astype(bool), index=self.required_capacity.index)
 
-    def selection_count_constraint(self, subplanning: pd.Series, options: pd.DataFrame) -> np.ndarray:
+    def _selection_count_constraint(self, subplanning: pd.Series, options: pd.DataFrame) -> np.ndarray:
         selection_constraint = np.zeros((len(self.remaining_items.loc[subplanning]), len(options)))
         l = len(options) // len(self.remaining_items.loc[subplanning])
         for k in range(len(selection_constraint)):
             selection_constraint[k, k * l:(k + 1) * l] = 1
         return selection_constraint
 
-    def make_selection(self) -> bool:
-        subplanning = self.solve_subplanning()
+    def _make_selection(self) -> bool:
+        subplanning = self._solve_subplanning()
         if subplanning is None:
             return False
         options = self._options(self.remaining_items.loc[subplanning])
         if options is None:
             return False
-        selection_constraint = self.selection_count_constraint(subplanning, options)
+        selection_constraint = self._selection_count_constraint(subplanning, options)
 
         planning = milp(
             -self.item_score.reindex(options.index.get_level_values(0)).fillna(0),
@@ -135,14 +137,20 @@ class ScheduleOptimiser(ScheduleStatus):
         
         return True
 
-    def generate_planning(self, n_iter) -> None:
-        for _ in range(n_iter):
-            if len(self.remaining_items) == 0:
-                break
-            cont = self.make_selection()
-            if not cont:
-                break
+    def __iter__(self):
+        return self
 
+    def __next__(self):
+        if len(self.remaining_items) == 0:
+            raise StopIteration
+        cont = self._make_selection()
+        if not cont:
+            raise StopIteration
+        
+    def generate_planning(self, n_iter) -> None:
+        iterator = iter(self)
+        for _ in tqdm(range(n_iter)):
+            next(iterator)
         final_selection = pd.DataFrame(self.selection, columns=['Key', 'Distribution'])
         self.capacity_used.columns = self.capacity_used.columns.to_series().map({v: k for k, v in self.resources_dict.items()})
         self.final_selection = pd.merge(
