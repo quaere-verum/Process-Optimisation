@@ -58,6 +58,7 @@ class ScheduleStatus:
             columns=self.required_capacity.columns,
             index=np.arange(1, self.timeslots_available + 1)
         ) * self.capacity_multiplier * self.capacity_usage_bound
+        
 
     def _update_state(self, selected_items: pd.DataFrame):
         capacity_used = selected_items.sum(axis=0).unstack().T.reindex(columns=self.remaining_capacity.columns, index=np.arange(1, self.timeslots_available + 1)).fillna(0)
@@ -70,19 +71,6 @@ class ScheduleStatus:
         self.item_score = self.item_score.loc[~self.item_score.index.isin(selected_items.index.get_level_values(0))]
         self.remaining_items = self.remaining_items.loc[~self.remaining_items.index.isin(selected_items.index.get_level_values(0))]
         self.selection.extend(selected_items.index.to_list())
-
-    # TODO: Improve efficiency of this function
-    def _generate_options(self, item_key: str, row: pd.Series) -> pd.DataFrame:
-        combs = []
-        for k in range(1, self.timeslots_available + 1):
-            combs = combs + list(combinations(range(1, self.timeslots_available + 1), k))
-        cols = pd.MultiIndex.from_tuples(list(product(np.arange(len(self.resources)), list(range(1, self.timeslots_available + 1)))))
-        index = pd.MultiIndex.from_tuples(list(product([item_key], combs)))
-        dataframe = pd.DataFrame(columns=cols, index=index)
-        for ind, row2 in dataframe.iterrows():
-            col = [(row['Resource'], k) for k in ind[1]]
-            dataframe.loc[ind, col] = row['relativeCost'] / len(ind[1])
-        return dataframe.fillna(0)
 
     def _options(self, selection: pd.DataFrame) -> Union[pd.DataFrame, None]:
         combs = []
@@ -118,13 +106,13 @@ class ScheduleOptimiser(ScheduleStatus):
             selection_constraint[k, k * l:(k + 1) * l] = 1
         return selection_constraint
 
-    def _make_selection(self) -> bool:
+    def _make_selection(self) -> int:
         subplanning = self._solve_subplanning()
         if subplanning is None:
-            return False
+            return 0
         options = self._options(self.remaining_items.loc[subplanning])
         if options is None:
-            return False
+            return 0
         selection_constraint = self._selection_count_constraint(subplanning, options)
 
         planning = milp(
@@ -137,11 +125,11 @@ class ScheduleOptimiser(ScheduleStatus):
             ]
         )
         if planning.x is None:
-            return False
+            return 0
         final_selection = options.loc[pd.Series(np.round(planning.x).astype(bool), index=options.index)]
         self._update_state(final_selection)
         
-        return True
+        return len(final_selection)
 
     def __iter__(self):
         return self
@@ -149,8 +137,8 @@ class ScheduleOptimiser(ScheduleStatus):
     def __next__(self):
         if len(self.remaining_items) == 0:
             raise StopIteration
-        cont = self._make_selection()
-        if not cont:
+        nr_selected = self._make_selection()
+        if nr_selected == 0:
             raise StopIteration
 
     def display_state(self):
@@ -188,8 +176,12 @@ if __name__ == '__main__':
         all_items=pd.DataFrame.from_dict(fake_item_info).T,
         max_subplanning_size=5,
     )
-    for k in tqdm(range(15)):
-        next(planner)
+    for k in tqdm(range(20)):
+        try:
+            next(planner)
+        except StopIteration:
+            print(f"Planning finished after {k} iterations.")
+            break
         if (k + 1) % 5 == 0:
             planner.display_state()
 
