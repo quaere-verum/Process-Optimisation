@@ -181,9 +181,9 @@ if __name__ == '__main__':
     fake_resources = [f'Team {k}' for k in range(1, 4)]
     fake_item_info = {key: {'relativeCost': np.random.randint(3, 10),
                                 'Priority': np.random.randint(1, 101),
-                                'Resource': np.random.choice(fake_teams, 1)[0],
+                                'Resource': np.random.choice(fake_resources, 1)[0],
                                 'Mandatory': np.random.binomial(1, 0.01)}
-                                for key in fake_feature_keys}
+                                for key in fake_item_keys}
     capacity_multiplier = pd.DataFrame(1, columns=fake_resources, index=np.arange(1, timeslots + 1))
 
     planner = ScheduleOptimiser(
