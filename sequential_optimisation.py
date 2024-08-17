@@ -84,12 +84,16 @@ class ScheduleStatus:
             dataframe.loc[ind, col] = row['relativeCost'] / len(ind[1])
         return dataframe.fillna(0)
 
-    # TODO: Improve efficiency of this function
     def _options(self, selection: pd.DataFrame) -> Union[pd.DataFrame, None]:
-        options = [self._generate_options(ind, row) for ind, row in selection.iterrows()]
-        if len(options) == 0:
-            return None
-        return pd.concat(options, axis=0).sort_index(axis=1).sort_index(axis=0)
+        combs = []
+        for k in range(1, self.timeslots_available + 1):
+            combs = combs + list(combinations(range(1, self.timeslots_available + 1), k))
+        index = selection.index.to_list() * len(combs)
+        item_timeslot_distributions = selection.reindex(index).sort_index().set_index(pd.MultiIndex.from_product([selection.index, combs]))
+        item_timeslot_distributions["Distribution"] = item_timeslot_distributions.index.get_level_values(1).values
+        options = item_timeslot_distributions.explode("Distribution").pivot(columns=["Resource", "Distribution"], values="relativeCost").sort_index(axis=1)
+        options = options / options.index.get_level_values(1).to_series().apply(lambda x: len(x)).values.reshape(-1, 1)
+        return options.fillna(0)
 
 
 class ScheduleOptimiser(ScheduleStatus):
