@@ -23,6 +23,10 @@ cmap = mcolors.ListedColormap([c for c in colour_dictionary.values()][::-1])
 
 @dataclass
 class ScheduleStatus:
+    """
+    Base class for schedule optimisation, used to store the relevant variables and 
+    implement basic and abstract methods common across all optimisation algorithms.
+    """
     timeslots_available: int
     capacity_usage_bound: Union[pd.DataFrame, pd.Series, float]
     capacity_multiplier: pd.DataFrame
@@ -30,6 +34,7 @@ class ScheduleStatus:
 
     
     def __post_init__(self):
+        assert np.isin(["Resource", "relativeCost", "Priority"], self.all_items.columns).all()
         self.resources = list(self.all_items.Resource.unique())
         self.items_dict = dict(zip(list(self.all_items.index), np.arange(len(self.all_items))))
         self.resources_dict = dict(zip(self.resources, np.arange(len(self.resources))))
