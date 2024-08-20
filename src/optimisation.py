@@ -31,7 +31,9 @@ class ScheduleOptimiser(ScheduleStatus):
         assert "Distribution" in self.all_items.columns, "Schedule optimiser assumes that items were already distributed over timeslots"
 
     def _options(self) -> pd.DataFrame:
-        return self.all_items.explode("Distribution").pivot(columns=["Resource", "Distribution"], values="relativeCost").sort_index(axis=1).fillna(0)
+        exploded = self.all_items.explode("Distribution")
+        task_length = self.all_items["Distribution"].reindex(exploded.index)
+        return exploded.pivot(columns=["Resource", "Distribution"], values="relativeCost").sort_index(axis=1).fillna(0) / task_length
     
     def make_planning(self, display_on_finish: bool = False):
         if self.capacity_used is not None:
